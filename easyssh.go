@@ -12,6 +12,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"sync"
 	"time"
@@ -43,13 +44,14 @@ type (
 
 	// DefaultConfig for ssh proxy config
 	DefaultConfig struct {
-		User     string
-		Server   string
-		Key      string
-		KeyPath  string
-		Port     string
-		Password string
-		Timeout  time.Duration
+		User         string
+		Server       string
+		Key          string
+		KeyPath      string
+		Port         string
+		Password     string
+		Timeout      time.Duration
+		ProxyCommand string
 	}
 )
 
@@ -128,28 +130,38 @@ func (ssh_conf *MakeConfig) Connect() (*ssh.Session, error) {
 
 	// Enable proxy command
 	if ssh_conf.Proxy.Server != "" {
-		proxyConfig, closer := getSSHConfig(DefaultConfig{
-			User:     ssh_conf.Proxy.User,
-			Key:      ssh_conf.Proxy.Key,
-			KeyPath:  ssh_conf.Proxy.KeyPath,
-			Password: ssh_conf.Proxy.Password,
-			Timeout:  ssh_conf.Proxy.Timeout,
-		})
-		if closer != nil {
-			defer closer.Close()
-		}
+		//proxyConfig, closer := getSSHConfig(DefaultConfig{
+		//	User:     ssh_conf.Proxy.User,
+		//	Key:      ssh_conf.Proxy.Key,
+		//	KeyPath:  ssh_conf.Proxy.KeyPath,
+		//	Password: ssh_conf.Proxy.Password,
+		//	Timeout:  ssh_conf.Proxy.Timeout,
+		//})
+		//if closer != nil {
+		//	defer closer.Close()
+		//}
 
-		proxyClient, err := ssh.Dial("tcp", net.JoinHostPort(ssh_conf.Proxy.Server, ssh_conf.Proxy.Port), proxyConfig)
-		if err != nil {
+		//proxyClient, err := ssh.Dial("tcp", net.JoinHostPort(ssh_conf.Proxy.Server, ssh_conf.Proxy.Port), proxyConfig)
+		//if err != nil {
+		//	return nil, err
+		//}
+
+		//conn, err := proxyClient.Dial("tcp", net.JoinHostPort(ssh_conf.Server, ssh_conf.Port))
+		//if err != nil {
+		//	return nil, err
+		//}
+
+		fmt.Println("This is proxy test")
+		c, s := net.Pipe()
+		cmd := exec.Command("sh", "-c", ssh_conf.Proxy.ProxyCommand)
+		cmd.Stdin = s
+		cmd.Stdout = s
+		cmd.Stderr = os.Stderr
+		if err := cmd.Start(); err != nil {
 			return nil, err
 		}
 
-		conn, err := proxyClient.Dial("tcp", net.JoinHostPort(ssh_conf.Server, ssh_conf.Port))
-		if err != nil {
-			return nil, err
-		}
-
-		ncc, chans, reqs, err := ssh.NewClientConn(conn, net.JoinHostPort(ssh_conf.Server, ssh_conf.Port), targetConfig)
+		ncc, chans, reqs, err := ssh.NewClientConn(c, net.JoinHostPort(ssh_conf.Server, ssh_conf.Port), targetConfig)
 		if err != nil {
 			return nil, err
 		}
